@@ -38,6 +38,10 @@ so_module so_mod;
 
 /*
  * Input
+ *
+ * "Player directions" below are as the player sees the game: in the rotated
+ * view the Vita is held upright with the D-pad at the bottom, so the player's
+ * right is the Vita's down and the player's up is the Vita's right.
  */
 
 #define MAX_TOUCH_EVENTS 16
@@ -47,12 +51,17 @@ so_module so_mod;
 #define TOUCH_MOVE 1
 #define TOUCH_UP 2
 
-// Simulated finger for the "shoot" button, out of range of real touch ids
-#define SHOOT_TOUCH_ID 9
+// Android pointer ids: real fingers use 0-3, the simulated shooting finger 4
+#define MAX_FINGER_ID 3
+#define SHOOT_TOUCH_ID 4
 
-// Accelerometer value (m/s^2) sent for a fully tilted stick
+// Accelerometer value (m/s^2) sent for a full tilt
 #define TILT_MAX 6.0f
 #define STICK_DEADZONE 16
+
+// While playing, front touches starting in this lower part of the game
+// screen steer instead of shooting.
+#define STEER_ZONE_TOP 0.6f
 
 static jfloatArray touches_arr, accels_arr;
 static jintArray keys_arr;
@@ -63,10 +72,14 @@ static int touch_count = 0;
 typedef struct {
     int active;
     int id;
+    int steer; // finger is used for steering, not passed to the game
     float x, y;
 } TouchSlot;
 
 static TouchSlot prev_touch[SCE_TOUCH_MAX_REPORT];
+static float touch_tilt = 0.0f;
+
+static SceTouchPanelInfo back_panel;
 
 static void push_touch(int id, int type, float x, float y) {
     if (touch_count >= MAX_TOUCH_EVENTS) return;
@@ -95,6 +108,10 @@ static void to_game_coords(int tx, int ty, float *gx, float *gy) {
     *gy = sy / dj_strip_scale;
 }
 
+static float steer_from_game_x(float gx) {
+    return gx < DJ_GAME_W * 0.5f ? -1.0f : 1.0f;
+}
+
 static void poll_touch(void) {
     SceTouchData td;
     memset(&td, 0, sizeof(td));
@@ -115,33 +132,59 @@ static void poll_touch(void) {
         int found = 0;
         for (int n = 0; n < SCE_TOUCH_MAX_REPORT; n++)
             if (now[n].active && now[n].id == prev_touch[p].id) found = 1;
-        if (!found)
-            push_touch(prev_touch[p].id & 7, TOUCH_UP, prev_touch[p].x, prev_touch[p].y);
+        if (!found && !prev_touch[p].steer)
+            push_touch(prev_touch[p].id & MAX_FINGER_ID, TOUCH_UP, prev_touch[p].x, prev_touch[p].y);
     }
 
     // New and moved touches
+    touch_tilt = 0.0f;
     for (int n = 0; n < SCE_TOUCH_MAX_REPORT; n++) {
         if (!now[n].active) continue;
         int found = -1;
         for (int p = 0; p < SCE_TOUCH_MAX_REPORT; p++)
             if (prev_touch[p].active && prev_touch[p].id == now[n].id) found = p;
-        if (found < 0)
-            push_touch(now[n].id & 7, TOUCH_DOWN, now[n].x, now[n].y);
-        else if (prev_touch[found].x != now[n].x || prev_touch[found].y != now[n].y)
-            push_touch(now[n].id & 7, TOUCH_MOVE, now[n].x, now[n].y);
+
+        if (found < 0) {
+            // A finger keeps its role (steering or game touch) until lifted.
+            now[n].steer = dj_java_gameplay_active() && now[n].y > DJ_GAME_H * STEER_ZONE_TOP;
+            if (!now[n].steer)
+                push_touch(now[n].id & MAX_FINGER_ID, TOUCH_DOWN, now[n].x, now[n].y);
+        } else {
+            now[n].steer = prev_touch[found].steer;
+            if (!now[n].steer && (prev_touch[found].x != now[n].x || prev_touch[found].y != now[n].y))
+                push_touch(now[n].id & MAX_FINGER_ID, TOUCH_MOVE, now[n].x, now[n].y);
+        }
+
+        if (now[n].steer)
+            touch_tilt = steer_from_game_x(now[n].x);
     }
 
     memcpy(prev_touch, now, sizeof(now));
+
+    // Rear touchpad: hold the player's left or right half to steer.
+    memset(&td, 0, sizeof(td));
+    sceTouchPeek(SCE_TOUCH_PORT_BACK, &td, 1);
+    if (td.reportNum > 0) {
+        int x = td.report[0].x, y = td.report[0].y;
+        if (dj_rotated) {
+            int mid = (back_panel.minAaY + back_panel.maxAaY) / 2;
+            touch_tilt = y > mid ? 1.0f : -1.0f;
+        } else {
+            int mid = (back_panel.minAaX + back_panel.maxAaX) / 2;
+            touch_tilt = x > mid ? 1.0f : -1.0f;
+        }
+    }
 }
 
 static uint32_t prev_buttons = 0;
 static int view_stick_armed = 1;
+static uint32_t shoot_button = 0;
 
 // Lifts all fingers, so that no touch stays stuck across a view switch.
 static void release_touches(void) {
     for (int p = 0; p < SCE_TOUCH_MAX_REPORT; p++)
-        if (prev_touch[p].active)
-            push_touch(prev_touch[p].id & 7, TOUCH_UP, prev_touch[p].x, prev_touch[p].y);
+        if (prev_touch[p].active && !prev_touch[p].steer)
+            push_touch(prev_touch[p].id & MAX_FINGER_ID, TOUCH_UP, prev_touch[p].x, prev_touch[p].y);
     memset(prev_touch, 0, sizeof(prev_touch));
 }
 
@@ -152,13 +195,35 @@ static float stick_axis(uint8_t v) {
     return f > 1.0f ? 1.0f : (f < -1.0f ? -1.0f : f);
 }
 
+// Where to "tap" for a shot: the game shoots towards the touched point.
+static void shoot_target(uint32_t button, float *x, float *y) {
+    uint32_t up, left, right;
+    if (dj_rotated) {
+        up = SCE_CTRL_RIGHT;
+        left = SCE_CTRL_UP;
+        right = SCE_CTRL_DOWN;
+    } else {
+        up = SCE_CTRL_UP;
+        left = SCE_CTRL_LEFT;
+        right = SCE_CTRL_RIGHT;
+    }
+
+    *y = DJ_GAME_H * 0.15f;
+    if (button & left)
+        *x = DJ_GAME_W * 0.05f;
+    else if (button & right)
+        *x = DJ_GAME_W * 0.95f;
+    else
+        *x = DJ_GAME_W * 0.5f; // up, and the face buttons
+    (void)up;
+}
+
 static void poll_buttons(void) {
     SceCtrlData pad;
     memset(&pad, 0, sizeof(pad));
     sceCtrlPeekBufferPositive(0, &pad, 1);
 
     uint32_t pressed = pad.buttons & ~prev_buttons;
-    uint32_t released = ~pad.buttons & prev_buttons;
     prev_buttons = pad.buttons;
 
     // Switch views: SELECT, or the right stick pushed towards the Vita's right
@@ -175,30 +240,31 @@ static void poll_buttons(void) {
         dj_set_rotated(!dj_rotated);
     }
 
-    // Tilt: left stick or D-pad. Android reports a negative X acceleration
-    // when the phone's right edge goes down.
-    float tilt;
-    if (dj_rotated) {
-        // Held upright, the player's right is the Vita's down.
-        tilt = stick_axis(pad.ly);
-        if (pad.buttons & SCE_CTRL_UP) tilt = -1.0f;
-        if (pad.buttons & SCE_CTRL_DOWN) tilt = 1.0f;
-    } else {
-        tilt = stick_axis(pad.lx);
-        if (pad.buttons & SCE_CTRL_LEFT) tilt = -1.0f;
-        if (pad.buttons & SCE_CTRL_RIGHT) tilt = 1.0f;
-    }
+    // Steering: left stick, or a steering touch. Android reports a negative X
+    // acceleration when the phone's right edge goes down.
+    float tilt = dj_rotated ? stick_axis(pad.ly) : stick_axis(pad.lx);
+    if (touch_tilt != 0.0f) tilt = touch_tilt;
     accels[0] = -tilt * TILT_MAX;
     accels[1] = 0.0f;
     accels[2] = 9.81f;
 
-    // Cross/Square/R: shoot straight up (a tap above the doodler)
-    const uint32_t shoot = SCE_CTRL_CROSS | SCE_CTRL_SQUARE | SCE_CTRL_RTRIGGER;
-    float sx = DJ_GAME_W * 0.5f, sy = DJ_GAME_H * 0.25f;
-    if (pressed & shoot)
-        push_touch(SHOOT_TOUCH_ID, TOUCH_DOWN, sx, sy);
-    else if (released & shoot && !(pad.buttons & shoot))
+    // Shooting: D-pad (up / up-left / up-right as the player sees it),
+    // or Cross/Square/R straight up. One simulated finger at a time.
+    const uint32_t shoot_buttons = SCE_CTRL_UP | SCE_CTRL_DOWN | SCE_CTRL_LEFT | SCE_CTRL_RIGHT |
+                                   SCE_CTRL_CROSS | SCE_CTRL_SQUARE | SCE_CTRL_RTRIGGER;
+    float sx, sy;
+    if (shoot_button && !(pad.buttons & shoot_button)) {
+        shoot_target(shoot_button, &sx, &sy);
         push_touch(SHOOT_TOUCH_ID, TOUCH_UP, sx, sy);
+        shoot_button = 0;
+    }
+    if (!shoot_button && (pressed & shoot_buttons)) {
+        // Pick one button out of the newly pressed ones
+        uint32_t b = pressed & shoot_buttons;
+        shoot_button = b & -b;
+        shoot_target(shoot_button, &sx, &sy);
+        push_touch(SHOOT_TOUCH_ID, TOUCH_DOWN, sx, sy);
+    }
 
     // Circle/Start: Android back button
     if (pressed & (SCE_CTRL_CIRCLE | SCE_CTRL_START))
@@ -260,6 +326,8 @@ int main() {
     keys = (*env)->GetIntArrayElements(env, keys_arr, NULL);
 
     sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, SCE_TOUCH_SAMPLING_STATE_START);
+    sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, SCE_TOUCH_SAMPLING_STATE_START);
+    sceTouchGetPanelInfo(SCE_TOUCH_PORT_BACK, &back_panel);
     sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG_WIDE);
 
     gl_init();

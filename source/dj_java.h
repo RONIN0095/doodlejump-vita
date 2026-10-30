@@ -47,6 +47,8 @@ enum {
     Msg_Show_Ad = 31,
     Msg_Terminate = 36,
     Msg_Swap_Buffer = 43,
+    Msg_Gameplay_Active = 54,
+    Msg_Gameplay_Inactive = 55,
     Msg_Generate_Currency_Texture = 63,
     Msg_On_Back_Pressed = -7,
     Msg_On_Destroy = -6,
@@ -72,5 +74,8 @@ jobject dj_java_asset_manager(void);
 // Main-thread housekeeping between frames (dialogs, deferred replies).
 void dj_java_update(void);
 int dj_java_dialog_active(void);
+
+// Whether a round is being played (Msg_Gameplay_Active/Inactive from the game)
+int dj_java_gameplay_active(void);
 
 #endif // DJ_JAVA_H

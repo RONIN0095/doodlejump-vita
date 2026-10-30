@@ -263,6 +263,12 @@ static void finish_dialog(PendingDialog *d, int button_id) {
     dj_java_send_native(Msg_Alert_Dialog_Result, res, 0, 0);
 }
 
+static int gameplay_active = 0;
+
+int dj_java_gameplay_active(void) {
+    return gameplay_active;
+}
+
 int dj_java_dialog_active(void) {
     return dialog_running;
 }
@@ -399,6 +405,13 @@ int dj_java_receive_message(int msg, jobject data, int arg1, int arg2) {
         case Msg_Terminate:
             l_info("[JAVA] Game requested termination.");
             sceKernelExitProcess(0);
+            break;
+
+        case Msg_Gameplay_Active:
+            gameplay_active = 1;
+            break;
+        case Msg_Gameplay_Inactive:
+            gameplay_active = 0;
             break;
 
         case Msg_Swap_Buffer:

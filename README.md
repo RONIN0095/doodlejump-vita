@@ -52,10 +52,16 @@ Saves are written to `ux0:data/doodlejump/files/`.
 
 ## Controls
 
+Directions are as you see the game (in the upright view, hold the Vita with the
+D-pad at the bottom).
+
 | Vita | Game |
 |---|---|
-| Left stick / D-pad (left-right as you hold the Vita) | Tilt (steer the doodler) |
-| Touch screen | Touch (menus, shooting) |
+| Left stick | Steer |
+| Rear touchpad, left/right half | Steer |
+| Front touch, lower part of the screen (while playing) | Steer |
+| Front touch, elsewhere | Touch (menus, shooting) |
+| D-pad up / left / right | Shoot up / up-left / up-right |
 | Cross / Square / R | Shoot straight up |
 | Circle / Start | Android back button (pause / back) |
 | SELECT, or right stick towards the Vita's right edge | Switch between upright full screen and landscape strip |
