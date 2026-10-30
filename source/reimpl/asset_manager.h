@@ -125,6 +125,11 @@ off_t AAsset_getRemainingLength(AAsset* asset);
 off_t AAsset_getLength(AAsset* asset);
 
 /**
+ * Get a pointer to the whole content of the asset (read into memory on first call).
+ */
+const void* AAsset_getBuffer(AAsset* asset);
+
+/**
  * Open a new file descriptor that can be used to read the asset data. If the
  * start or length cannot be represented by a 32-bit number, it will be
  * truncated. If the file is large, use AAsset_openFileDescriptor64 instead.

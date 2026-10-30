@@ -98,8 +98,6 @@ void soloader_init_all() {
     jni_init();
     l_success("FalsoJNI initialized.");
 
-#ifndef NDK_PORT
-    controls_init();
-    l_success("Controls initialized.");
-#endif
+    // Doodle Jump polls input on the main thread (see main.c),
+    // so the boilerplate controls thread is not started.
 }

@@ -57,6 +57,9 @@
 #include "reimpl/time64.h"
 #include "reimpl/asset_manager.h"
 
+#include "dj_game.h"
+#include <psp2/kernel/processmgr.h>
+
 #ifdef NDK_PORT
 #include <falso_ndk/FalsoNDK.h>
 #endif
@@ -133,7 +136,34 @@ static FILE __sF_fake[3];
 
 void *dlsym_soloader(void * handle, const char * symbol);
 
+// Bionic struct utsname: six fields of 65 chars each
+struct bionic_utsname {
+    char sysname[65];
+    char nodename[65];
+    char release[65];
+    char version[65];
+    char machine[65];
+    char domainname[65];
+};
+
+static int uname_soloader(struct bionic_utsname *buf) {
+    memset(buf, 0, sizeof(*buf));
+    strcpy(buf->sysname, "Linux");
+    strcpy(buf->nodename, "localhost");
+    strcpy(buf->release, "3.4.0");
+    strcpy(buf->version, "#1 SMP PREEMPT");
+    strcpy(buf->machine, "armv7l");
+    return 0;
+}
+
+static void _exit_soloader(int status) {
+    sceKernelExitProcess(status);
+}
+
 so_default_dynlib default_dynlib[] = {
+        { "_exit", (uintptr_t)&_exit_soloader },
+        { "sigprocmask", (uintptr_t)&ret0 },
+        { "uname", (uintptr_t)&uname_soloader },
         // Common C/C++ internals
         { "_ZNSt8bad_castD1Ev", (uintptr_t)&_ZNSt8bad_castD1Ev },
         { "_ZNSt9exceptionD2Ev", (uintptr_t)&_ZNSt9exceptionD2Ev },
@@ -249,6 +279,7 @@ so_default_dynlib default_dynlib[] = {
         // AAssetManager
         { "AAsset_close", (uintptr_t)&AAsset_close },
         { "AAsset_getLength", (uintptr_t)&AAsset_getLength },
+        { "AAsset_getBuffer", (uintptr_t)&AAsset_getBuffer },
         { "AAsset_getRemainingLength", (uintptr_t)&AAsset_getRemainingLength },
         { "AAsset_read", (uintptr_t)&AAsset_read },
         { "AAsset_seek", (uintptr_t)&AAsset_seek },
@@ -561,7 +592,9 @@ so_default_dynlib default_dynlib[] = {
         { "eglQueryContext", (uintptr_t)&eglQueryContext },
         { "eglQueryString", (uintptr_t)&eglQueryString },
         { "eglQuerySurface", (uintptr_t)&eglQuerySurface },
-        { "eglSwapBuffers", (uintptr_t)&eglSwapBuffers },
+        { "eglSwapBuffers", (uintptr_t)&eglSwapBuffers_dj },
+        { "eglGetCurrentDisplay", (uintptr_t)&eglGetCurrentDisplay_dj },
+        { "eglGetCurrentSurface", (uintptr_t)&eglGetCurrentSurface_dj },
         { "eglTerminate", (uintptr_t)&eglTerminate },
 
 
@@ -590,7 +623,7 @@ so_default_dynlib default_dynlib[] = {
         { "glCheckFramebufferStatus", (uintptr_t)&glCheckFramebufferStatus },
         { "glCheckFramebufferStatusOES", (uintptr_t)&glCheckFramebufferStatus },
         { "glClear", (uintptr_t)&glClear },
-        { "glClearColor", (uintptr_t)&glClearColor },
+        { "glClearColor", (uintptr_t)&glClearColor_dj },
         { "glClearColorx", (uintptr_t)&glClearColorx },
         { "glClearDepthf", (uintptr_t)&glClearDepthf },
         { "glClearDepthx", (uintptr_t)&glClearDepthx },
@@ -625,7 +658,7 @@ so_default_dynlib default_dynlib[] = {
         { "glDepthRangef", (uintptr_t)&glDepthRangef },
         { "glDepthRangex", (uintptr_t)&glDepthRangex },
         { "glDetachShader", (uintptr_t)&ret0 },
-        { "glDisable", (uintptr_t)&glDisable },
+        { "glDisable", (uintptr_t)&glDisable_dj },
         { "glDisableClientState", (uintptr_t)&glDisableClientState },
         { "glDisableVertexAttribArray", (uintptr_t)&glDisableVertexAttribArray },
         { "glDrawArrays", (uintptr_t)&glDrawArrays },
@@ -819,7 +852,7 @@ so_default_dynlib default_dynlib[] = {
         { "glVertexAttrib4fv", (uintptr_t)&glVertexAttrib4fv },
         { "glVertexAttribPointer", (uintptr_t)&glVertexAttribPointer },
         { "glVertexPointer", (uintptr_t)&glVertexPointer },
-        { "glViewport", (uintptr_t)&glViewport },
+        { "glViewport", (uintptr_t)&glViewport_dj },
         { "glWeightPointerOES", (uintptr_t)&ret0 },
 
 
@@ -1107,7 +1140,7 @@ so_default_dynlib default_dynlib[] = {
 void *dlsym_soloader(void * handle, const char * symbol) {
     for (int i = 0; i < sizeof(default_dynlib) / sizeof(default_dynlib[0]); i++) {
         if (strcmp(symbol, default_dynlib[i].symbol) == 0) {
-            return &default_dynlib[i].func;
+            return (void *)default_dynlib[i].func;
         }
     }
 

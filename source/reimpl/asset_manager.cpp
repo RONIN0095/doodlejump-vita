@@ -20,6 +20,7 @@ typedef struct aAsset {
     size_t bytesRead;
     size_t fileSize;
     bool opened = false;
+    void * buffer = nullptr;
 } asset;
 
 static AAssetManager * g_AAssetManager = nullptr;
@@ -78,6 +79,7 @@ void AAsset_close(AAsset* asset) {
     if (asset) {
         auto * a = (aAsset *) asset;
         free(a->filename);
+        free(a->buffer);
         if (a->opened) {
 #ifdef USE_SCELIBC_IO
             sceLibcBridge_fclose(a->f);
@@ -208,4 +210,36 @@ int AAsset_openFileDescriptor(AAsset* asset, off_t* outStart, off_t* outLength) 
     int ret = open(a->filename, O_RDONLY);
     l_debug("AAsset_openFileDescriptor(%p/\"%s\", %p, %p): ret %i", asset, a->filename, outStart, outLength, ret);
     return ret;
+}
+
+const void* AAsset_getBuffer(AAsset* asset) {
+    if (!asset) return nullptr;
+
+    auto * a = (aAsset *) asset;
+    if (a->buffer) return a->buffer;
+    if (!a->opened) return nullptr;
+
+    a->buffer = malloc(a->fileSize ? a->fileSize : 1);
+    if (!a->buffer) return nullptr;
+
+#ifdef USE_SCELIBC_IO
+    long pos = sceLibcBridge_ftell(a->f);
+    sceLibcBridge_fseek(a->f, 0, SEEK_SET);
+    size_t got = sceLibcBridge_fread(a->buffer, 1, a->fileSize, a->f);
+    sceLibcBridge_fseek(a->f, pos, SEEK_SET);
+#else
+    long pos = ftell(a->f);
+    fseek(a->f, 0, SEEK_SET);
+    size_t got = fread(a->buffer, 1, a->fileSize, a->f);
+    fseek(a->f, pos, SEEK_SET);
+#endif
+
+    if (got != a->fileSize) {
+        l_error("AAsset_getBuffer(%s): short read (%i of %i)", a->filename, (int)got, (int)a->fileSize);
+        free(a->buffer);
+        a->buffer = nullptr;
+    }
+
+    l_debug("AAsset_getBuffer<%p>(%p): %p", __builtin_return_address(0), asset, a->buffer);
+    return a->buffer;
 }

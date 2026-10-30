@@ -1,0 +1,45 @@
+name: Build VPK
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    env:
+      VITASDK: /usr/local/vitasdk
+      # VitaSDK-softfp toolchain (master-linux-v2.22)
+      VITASDK_URL: https://github.com/vitasdk-softfp/autobuilds/releases/download/master-linux-v2.22/vitasdk-x86_64-linux-gnu-2025-12-27_21-40-50.tar.bz2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install host dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake make python3 curl bzip2 xz-utils patch git
+
+      - name: Install VitaSDK-softfp
+        run: |
+          sudo mkdir -p "$VITASDK"
+          sudo chown "$USER" "$VITASDK"
+          curl -sSL "$VITASDK_URL" | tar xj -C "$VITASDK" --strip-components=1
+          echo "$VITASDK/bin" >> "$GITHUB_PATH"
+
+      - name: Install VitaSDK-softfp packages
+        run: |
+          export PATH="$VITASDK/bin:$PATH"
+          git clone --depth 1 https://github.com/vitasdk-softfp/vdpm.git /tmp/vdpm
+          cd /tmp/vdpm && ./install-all.sh
+
+      - name: Build
+        run: |
+          export PATH="$VITASDK/bin:$PATH"
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(nproc)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: doodlejump-vpk
+          path: build/doodlejump.vpk
