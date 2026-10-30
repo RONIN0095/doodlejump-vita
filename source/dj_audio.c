@@ -198,10 +198,14 @@ void dj_audio_init(void) {
     sceKernelCreateLwMutex(&audio_lock, "dj_audio", SCE_KERNEL_MUTEX_ATTR_RECURSIVE, 0, NULL);
     loader_sema = sceKernelCreateSema("dj_audio_loader", 0, 0, 0x7FFFFFFF, NULL);
 
-    SceUID t = sceKernelCreateThread("dj_audio_loader", loader_thread, 0x10000100, 0x10000, 0, 0, NULL);
+    // Keep decoding off the game's core and below its priority, so it does
+    // not slow down the loading screen.
+    SceUID t = sceKernelCreateThread("dj_audio_loader", loader_thread, 0x10000100 + 10, 0x10000, 0,
+                                     SCE_KERNEL_CPU_MASK_USER_2, NULL);
     sceKernelStartThread(t, 0, NULL);
 
-    t = sceKernelCreateThread("dj_audio_mixer", mixer_thread, 0x10000100 - 10, 0x10000, 0, 0, NULL);
+    t = sceKernelCreateThread("dj_audio_mixer", mixer_thread, 0x10000100 - 10, 0x10000, 0,
+                              SCE_KERNEL_CPU_MASK_USER_1, NULL);
     sceKernelStartThread(t, 0, NULL);
 
     l_success("[AUDIO] Initialized.");

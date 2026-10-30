@@ -9,6 +9,7 @@
 
 #include <psp2/io/fcntl.h>
 #include <psp2/kernel/clib.h>
+#include <psp2/kernel/processmgr.h>
 #include <psp2/kernel/threadmgr.h>
 
 #include <stdbool.h>
@@ -45,7 +46,8 @@ static void log_to_file(int t, const char *fmt, va_list list) {
     if (fd < 0) return;
     truncated = 1;
 
-    int n = sceClibSnprintf(buffer_c, sizeof(buffer_c), "[%s] ", level_names[t]);
+    unsigned int ms = (unsigned int)(sceKernelGetProcessTimeWide() / 1000);
+    int n = sceClibSnprintf(buffer_c, sizeof(buffer_c), "%6u.%03u [%s] ", ms / 1000, ms % 1000, level_names[t]);
     n += sceClibVsnprintf(buffer_c + n, sizeof(buffer_c) - n, fmt, list);
     if (n > (int)sizeof(buffer_c) - 2) n = sizeof(buffer_c) - 2;
     buffer_c[n++] = '\n';
