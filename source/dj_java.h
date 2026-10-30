@@ -53,6 +53,8 @@ enum {
     Msg_On_Stop = -5,
     Msg_On_Start = -4,
     Msg_Native_Environment_Ready = -3,
+    Msg_Launch_Android_Permissions_Settings = -11,
+    Msg_Android_Permissions_Settings_Ready = -12,
     Msg_Initialize_Native_Environment = -1,
 };
 

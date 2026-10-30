@@ -267,7 +267,33 @@ int dj_java_dialog_active(void) {
     return dialog_running;
 }
 
+/*
+ * Replies that Java sends asynchronously (sendMessageThreadSafe): delivered
+ * from the main loop between frames, never from inside a native call.
+ */
+
+#define MAX_DEFERRED 16
+
+static int deferred_msgs[MAX_DEFERRED];
+static int deferred_count = 0;
+
+static void defer_reply(int msg) {
+    if (deferred_count < MAX_DEFERRED)
+        deferred_msgs[deferred_count++] = msg;
+}
+
+static void deliver_deferred(void) {
+    int n = deferred_count;
+    int msgs[MAX_DEFERRED];
+    memcpy(msgs, deferred_msgs, sizeof(int) * n);
+    deferred_count = 0;
+    for (int i = 0; i < n; i++)
+        dj_java_send_native(msgs[i], NULL, 0, 0);
+}
+
 void dj_java_update(void) {
+    deliver_deferred();
+
     if (dialog_running) {
         if (sceMsgDialogGetStatus() != SCE_COMMON_DIALOG_STATUS_FINISHED)
             return;
@@ -362,6 +388,12 @@ int dj_java_receive_message(int msg, jobject data, int arg1, int arg2) {
 
         case Msg_Show_Alert_Dialog:
             handle_show_alert_dialog(data);
+            break;
+
+        case Msg_Launch_Android_Permissions_Settings:
+        case 245:
+            // MainActivity.checkForPermissions(): storage access is always granted here.
+            defer_reply(Msg_Android_Permissions_Settings_Ready);
             break;
 
         case Msg_Terminate:
