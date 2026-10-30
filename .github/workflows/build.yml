@@ -33,6 +33,12 @@ jobs:
           git clone --depth 1 https://github.com/vitasdk-softfp/vdpm.git /tmp/vdpm
           cd /tmp/vdpm && ./install-all.sh
 
+      # The vitaGL submodule needs newer SceGxm definitions than the toolchain ships.
+      - name: Update psp2 headers
+        run: |
+          git clone --depth 1 https://github.com/vitasdk/vita-headers.git /tmp/vita-headers
+          cp -r /tmp/vita-headers/include/psp2* "$VITASDK/arm-vita-eabi/include/"
+
       - name: Build
         run: |
           export PATH="$VITASDK/bin:$PATH"
