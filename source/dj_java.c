@@ -48,8 +48,10 @@ void dj_java_init(so_module *mod) {
 }
 
 int dj_java_send_native(int msg, jobject data, int arg1, int arg2) {
-    l_debug("[JAVA] -> native msg %i (%s)", msg, data ? dj_class_name(data) : "null");
-    return sendMessageNative(dj_env(), notification_center, msg, data, arg1, arg2);
+    l_info("[JAVA] -> native msg %i (%s)", msg, data ? dj_class_name(data) : "null");
+    int ret = sendMessageNative(dj_env(), notification_center, msg, data, arg1, arg2);
+    l_info("[JAVA] -> native msg %i done", msg);
+    return ret;
 }
 
 jobject dj_java_asset_manager(void) {
@@ -302,6 +304,11 @@ static void log_unhandled(int msg) {
 }
 
 int dj_java_receive_message(int msg, jobject data, int arg1, int arg2) {
+    static uint8_t logged[256];
+    if (logged[(uint8_t)msg] < 3) {
+        logged[(uint8_t)msg]++;
+        l_info("[JAVA] <- native msg %i (%s)", msg, data ? dj_class_name(data) : "null");
+    }
     switch (msg) {
         case Msg_Load_Sound: {
             char *name = dj_get_string(data, "filename");

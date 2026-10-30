@@ -7,6 +7,7 @@
 
 #include "utils/logger.h"
 
+#include <psp2/io/fcntl.h>
 #include <psp2/kernel/clib.h>
 #include <psp2/kernel/threadmgr.h>
 
@@ -29,6 +30,28 @@ static atomic_bool _log_mutex_ready = ATOMIC_VAR_INIT(false);
 static char buffer_a[2048];
 // Buffer B is used to compile the final log using the updated format string.
 static char buffer_b[2048];
+// Buffer C holds the uncolored line for the log file.
+static char buffer_c[2048];
+
+#define LOG_FILE DATA_PATH "log.txt"
+
+static const char *level_names[] = { "debug", "info", "warn", "ERROR", "FATAL", "ok", "wait" };
+
+// Appends a line and closes the file right away, so the log survives a hang or crash.
+static void log_to_file(int t, const char *fmt, va_list list) {
+    static int truncated = 0;
+    int flags = SCE_O_WRONLY | SCE_O_CREAT | (truncated ? SCE_O_APPEND : SCE_O_TRUNC);
+    SceUID fd = sceIoOpen(LOG_FILE, flags, 0777);
+    if (fd < 0) return;
+    truncated = 1;
+
+    int n = sceClibSnprintf(buffer_c, sizeof(buffer_c), "[%s] ", level_names[t]);
+    n += sceClibVsnprintf(buffer_c + n, sizeof(buffer_c) - n, fmt, list);
+    if (n > (int)sizeof(buffer_c) - 2) n = sizeof(buffer_c) - 2;
+    buffer_c[n++] = '\n';
+    sceIoWrite(fd, buffer_c, n);
+    sceIoClose(fd);
+}
 
 void _log_print(int t, const char* fmt, ...) {
     if (!atomic_load_explicit(&_log_mutex_ready, memory_order_relaxed)) {
@@ -75,6 +98,10 @@ void _log_print(int t, const char* fmt, ...) {
     sceClibVsnprintf(buffer_b, sizeof(buffer_b), buffer_a, list);
     va_end(list);
     sceClibPrintf(buffer_b);
+
+    va_start(list, fmt);
+    log_to_file(t, fmt, list);
+    va_end(list);
 
     if (atomic_load_explicit(&_log_mutex_ready, memory_order_relaxed)) {
         sceKernelUnlockLwMutex(&_log_mutex, 1);

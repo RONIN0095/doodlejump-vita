@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include <psp2/ctrl.h>
+#include <psp2/io/stat.h>
 #include <psp2/kernel/threadmgr.h>
 #include <psp2/touch.h>
 
@@ -195,10 +196,17 @@ static jobject make_system_configuration(void) {
 }
 
 int main() {
+    // Needed before anything logs: the log file lives here.
+    sceIoMkdir("ux0:data", 0777);
+    sceIoMkdir("ux0:data/doodlejump", 0777);
+    l_info("Doodle Jump loader starting.");
+
     soloader_init_all();
+    l_info("Loader initialized.");
 
     dj_jni_install();
     dj_java_init(&so_mod);
+    l_info("Java bridge initialized.");
     dj_audio_init();
 
     runGameLoopNative = (void *)so_symbol(&so_mod, "Java_com_limasky_doodlejumpandroid_NotificationCenter_runGameLoopNative");
@@ -222,6 +230,11 @@ int main() {
 
     gl_init();
     dj_gl_setup();
+    l_info("vitaGL initialized.");
+
+    // Show a black frame right away, so the system's loading indicator goes away.
+    dj_gl_begin_frame();
+    vglSwapBuffers(GL_FALSE);
 
     // Same order as MainApplication.onCreate / BaseActivity / OpenGL10Renderer
     dj_java_send_native(Msg_Initialize_Native_Environment, NULL, 0, 0);
@@ -230,7 +243,12 @@ int main() {
     dj_java_send_native(Msg_System_Configuration, make_system_configuration(), 0, 0);
     l_success("Native environment initialized, entering game loop.");
 
+    int frame = 0;
     while (1) {
+        if (frame < 5 || frame % 600 == 0)
+            l_info("Frame %i", frame);
+        frame++;
+
         dj_java_update();
 
         touch_count = 0;

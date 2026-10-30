@@ -27,17 +27,15 @@ extern "C" {
 
 #ifdef DEBUG_SOLOADER
 #define l_debug(...)   _log_print(LT_DEBUG,   __VA_ARGS__)
+#else
+#define l_debug(...)
+#endif
+
+// Always on: these also go to the log file, see logger.c
 #define l_info(...)    _log_print(LT_INFO,    __VA_ARGS__)
 #define l_warn(...)    _log_print(LT_WARN,    __VA_ARGS__)
 #define l_success(...) _log_print(LT_SUCCESS, __VA_ARGS__)
 #define l_wait(...)    _log_print(LT_WAIT,    __VA_ARGS__)
-#else
-#define l_debug(...)
-#define l_info(...)
-#define l_warn(...)
-#define l_success(...)
-#define l_wait(...)
-#endif
 
 #define l_error(...)   _log_print(LT_ERROR,   __VA_ARGS__)
 #define l_fatal(...)   _log_print(LT_FATAL,   __VA_ARGS__)
