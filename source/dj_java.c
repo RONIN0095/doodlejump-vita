@@ -109,7 +109,7 @@ static void handle_load_text_file(jobject data) {
         // Context.openFileInput() first, then the APK assets.
         snprintf(path, sizeof(path), SAVE_PATH "%s", name);
         if (!file_load(path, &buf, &size)) {
-            snprintf(path, sizeof(path), DATA_PATH "assets/%s", name);
+            snprintf(path, sizeof(path), GAME_PATH "assets/%s", name);
             if (!file_load(path, &buf, &size)) buf = NULL;
         }
 
@@ -137,7 +137,7 @@ static void handle_does_file_exist(jobject data) {
     jboolean exists = JNI_FALSE;
     if (name) {
         char path[512];
-        snprintf(path, sizeof(path), DATA_PATH "assets/%s", name);
+        snprintf(path, sizeof(path), GAME_PATH "assets/%s", name);
         exists = file_exists(path) ? JNI_TRUE : JNI_FALSE;
     }
     dj_set_bool(data, "file_exists", exists);

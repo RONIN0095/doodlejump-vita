@@ -78,7 +78,7 @@ static Sound *find_sound(int64_t id) {
 
 static void decode_sound(Sound *s) {
     char full[512];
-    snprintf(full, sizeof(full), DATA_PATH "assets/%s", s->path);
+    snprintf(full, sizeof(full), GAME_PATH "assets/%s", s->path);
 
     uint8_t *data = NULL;
     size_t size = 0;

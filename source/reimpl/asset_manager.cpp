@@ -39,7 +39,7 @@ AAssetManager * AAssetManager_create() {
 }
 
 AAsset* AAssetManager_open(AAssetManager* mgr, const char* filename, int mode) {
-    std::string realp = std::string(DATA_PATH) + std::string("assets/") + std::string(filename);
+    std::string realp = std::string(GAME_PATH) + std::string("assets/") + std::string(filename);
 
     auto * a = new aAsset;
     a->filename = (char *) malloc(realp.length() + 1);

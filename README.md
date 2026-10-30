@@ -35,9 +35,16 @@ system font (currency and score-marker labels).
 1. Install [kubridge](https://github.com/bythos14/kubridge/releases)
    (`kubridge.skprx` under `*KERNEL` in your taiHEN config) and reboot.
 2. Install `doodlejump.vpk` with VitaShell.
-3. Open the Doodle Jump 3.10.0 APK as a zip (for example with 7-Zip) and copy:
-   - `lib/armeabi-v7a/libDoodleJump.so` → `ux0:data/doodlejump/libDoodleJump.so`
-   - the whole `assets/` folder → `ux0:data/doodlejump/assets/`
+3. Game files, either:
+   - **bundled** (no copying on the Vita): extract the APK and build with
+     `-DGAME_DATA_DIR=/path/to/extracted-apk`; the `.so` and `assets/` are then
+     packed into the VPK and read from `app0:`; or
+   - **separately**: open the APK as a zip and copy
+     `lib/armeabi-v7a/libDoodleJump.so` → `ux0:data/doodlejump/libDoodleJump.so`
+     and the whole `assets/` folder → `ux0:data/doodlejump/assets/`.
+
+   A VPK with bundled game files contains Lima Sky's copyrighted data: keep it
+   for your own use and do not share it.
 
 Saves are written to `ux0:data/doodlejump/files/`.
 

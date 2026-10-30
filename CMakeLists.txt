@@ -22,9 +22,19 @@ set(PSVITAIP "192.168.0.198" CACHE STRING "PSVita IP (for FTP access)")
 set(PARSECOREPATH "$ENV{PARSECOREPATH}" CACHE STRING "vita-parse-core main.py")
 
 # Game-specific definitions
-set(DATA_PATH "ux0:data/doodlejump/") # Path to data (with trailing /)
-set(SO_PATH "${DATA_PATH}libDoodleJump.so") # Path to .so
-add_definitions(-DDATA_PATH="${DATA_PATH}" -DSO_PATH="${SO_PATH}")
+set(DATA_PATH "ux0:data/doodlejump/") # Path to writable data: saves (with trailing /)
+
+# Optional: an extracted Doodle Jump 3.10.0 APK (folder containing lib/ and assets/).
+# When set, the .so and all assets are packed into the VPK and read from app0:.
+# Otherwise they are expected under DATA_PATH.
+set(GAME_DATA_DIR "" CACHE PATH "Extracted APK to bundle into the VPK")
+if (GAME_DATA_DIR)
+  set(GAME_PATH "app0:")
+else()
+  set(GAME_PATH "${DATA_PATH}")
+endif()
+set(SO_PATH "${GAME_PATH}libDoodleJump.so") # Path to .so
+add_definitions(-DDATA_PATH="${DATA_PATH}" -DGAME_PATH="${GAME_PATH}" -DSO_PATH="${SO_PATH}")
 
 # Port type
 option(NDK_PORT "This should be on if the game is done with Android NDK (has an android_main entry point)" OFF)
@@ -237,6 +247,18 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
                       )
 
 vita_create_self(eboot.bin ${CMAKE_PROJECT_NAME} UNSAFE NOASLR)
+set(GAME_VPK_FILES "")
+if (GAME_DATA_DIR)
+  if (NOT EXISTS "${GAME_DATA_DIR}/lib/armeabi-v7a/libDoodleJump.so")
+    message(FATAL_ERROR "GAME_DATA_DIR does not contain lib/armeabi-v7a/libDoodleJump.so")
+  endif()
+  list(APPEND GAME_VPK_FILES "${GAME_DATA_DIR}/lib/armeabi-v7a/libDoodleJump.so" libDoodleJump.so)
+  file(GLOB_RECURSE game_assets RELATIVE "${GAME_DATA_DIR}" "${GAME_DATA_DIR}/assets/*")
+  foreach(asset ${game_assets})
+    list(APPEND GAME_VPK_FILES "${GAME_DATA_DIR}/${asset}" "${asset}")
+  endforeach()
+endif()
+
 vita_create_vpk(${VITA_VPKNAME}.vpk ${VITA_TITLEID} eboot.bin
                 VERSION ${VITA_VERSION}
                 NAME ${VITA_APP_NAME}
@@ -248,6 +270,7 @@ vita_create_vpk(${VITA_VPKNAME}.vpk ${VITA_TITLEID} eboot.bin
                 ${CMAKE_SOURCE_DIR}/extras/livearea/startup.png sce_sys/livearea/contents/startup.png
                 ${CMAKE_SOURCE_DIR}/extras/livearea/bg0.png sce_sys/livearea/contents/bg0.png
                 ${CMAKE_SOURCE_DIR}/extras/livearea/template.xml sce_sys/livearea/contents/template.xml
+                ${GAME_VPK_FILES}
                 )
 
 add_custom_target(send
