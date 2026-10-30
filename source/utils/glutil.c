@@ -37,7 +37,8 @@ void gl_preload() {
 }
 
 void gl_init() {
-    vglInitExtended(0, 960, 544, 6 * 1024 * 1024, SCE_GXM_MULTISAMPLE_4X);
+    // Small pool for GL1 immediate mode (glBegin/glEnd), used by the menu signature
+    vglInitExtended(0x10000, 960, 544, 6 * 1024 * 1024, SCE_GXM_MULTISAMPLE_4X);
 }
 
 void gl_swap() {
