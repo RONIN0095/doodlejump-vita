@@ -30,32 +30,11 @@ int sceLibcHeapSize = 4 * 1024 * 1024;
 so_module so_mod;
 
 /*
- * Screen layout: the game is portrait-only, so it gets a 2:3 area in the
- * middle of the 960x544 screen.
+ * Screen layout: see dj_game.c. The game always gets a 544x960 screen.
  */
 
 #define SCREEN_W 960
 #define SCREEN_H 544
-
-// Rotated (default): the picture is turned by 90 degrees and fills the whole
-// screen; the Vita is held upright with its left side (D-pad) at the bottom.
-// Pillarboxed: a 2:3 strip in the middle of the landscape screen. Selected by
-// creating DATA_PATH "landscape.txt".
-int dj_rotated = 1;
-
-int dj_game_w = 362;
-int dj_game_h = SCREEN_H;
-int dj_game_x = (SCREEN_W - 362) / 2;
-
-static void setup_layout(void) {
-    dj_rotated = !file_exists(DATA_PATH "landscape.txt");
-    if (dj_rotated) {
-        dj_game_w = SCREEN_H;
-        dj_game_h = SCREEN_W;
-        dj_game_x = 0;
-    }
-    l_info("Layout: %s, game screen %ix%i", dj_rotated ? "rotated" : "pillarboxed", dj_game_w, dj_game_h);
-}
 
 /*
  * Input
@@ -109,11 +88,11 @@ static void to_game_coords(int tx, int ty, float *gx, float *gy) {
         *gy = (float)(SCREEN_W - 1) - sx;
         return;
     }
-    float x = sx - (float)dj_game_x;
+    float x = (sx - (float)dj_strip_x) / dj_strip_scale;
     if (x < 0) x = 0;
-    if (x > dj_game_w - 1) x = (float)(dj_game_w - 1);
+    if (x > DJ_GAME_W - 1) x = (float)(DJ_GAME_W - 1);
     *gx = x;
-    *gy = sy * dj_game_h / SCREEN_H;
+    *gy = sy / dj_strip_scale;
 }
 
 static void poll_touch(void) {
@@ -156,6 +135,15 @@ static void poll_touch(void) {
 }
 
 static uint32_t prev_buttons = 0;
+static int view_stick_armed = 1;
+
+// Lifts all fingers, so that no touch stays stuck across a view switch.
+static void release_touches(void) {
+    for (int p = 0; p < SCE_TOUCH_MAX_REPORT; p++)
+        if (prev_touch[p].active)
+            push_touch(prev_touch[p].id & 7, TOUCH_UP, prev_touch[p].x, prev_touch[p].y);
+    memset(prev_touch, 0, sizeof(prev_touch));
+}
 
 static float stick_axis(uint8_t v) {
     int d = (int)v - 128;
@@ -172,6 +160,20 @@ static void poll_buttons(void) {
     uint32_t pressed = pad.buttons & ~prev_buttons;
     uint32_t released = ~pad.buttons & prev_buttons;
     prev_buttons = pad.buttons;
+
+    // Switch views: SELECT, or the right stick pushed towards the Vita's right
+    // edge ("right" when held landscape, "up" when held upright).
+    int toggle = (pressed & SCE_CTRL_SELECT) != 0;
+    if (view_stick_armed && pad.rx > 224) {
+        toggle = 1;
+        view_stick_armed = 0;
+    } else if (pad.rx < 176) {
+        view_stick_armed = 1;
+    }
+    if (toggle) {
+        release_touches();
+        dj_set_rotated(!dj_rotated);
+    }
 
     // Tilt: left stick or D-pad. Android reports a negative X acceleration
     // when the phone's right edge goes down.
@@ -192,7 +194,7 @@ static void poll_buttons(void) {
 
     // Cross/Square/R: shoot straight up (a tap above the doodler)
     const uint32_t shoot = SCE_CTRL_CROSS | SCE_CTRL_SQUARE | SCE_CTRL_RTRIGGER;
-    float sx = dj_game_w * 0.5f, sy = dj_game_h * 0.25f;
+    float sx = DJ_GAME_W * 0.5f, sy = DJ_GAME_H * 0.25f;
     if (pressed & shoot)
         push_touch(SHOOT_TOUCH_ID, TOUCH_DOWN, sx, sy);
     else if (released & shoot && !(pad.buttons & shoot))
@@ -212,8 +214,8 @@ static int (*runGameLoopNative)(JNIEnv *env, jclass clazz, int num_touches, jflo
 
 static jobject make_system_configuration(void) {
     jobject cfg = dj_new_object("com/limasky/doodlejumpandroid/Messages$MsgSystemConfigurationData");
-    dj_set_int(cfg, "screenWidth", dj_game_w);
-    dj_set_int(cfg, "screenHeight", dj_game_h);
+    dj_set_int(cfg, "screenWidth", DJ_GAME_W);
+    dj_set_int(cfg, "screenHeight", DJ_GAME_H);
     dj_set_string(cfg, "locale", "en_US");
     dj_set_string(cfg, "country", "us");
     dj_set_string(cfg, "languageCode", "en");
@@ -238,7 +240,7 @@ int main() {
     dj_jni_install();
     dj_java_init(&so_mod);
     l_info("Java bridge initialized.");
-    setup_layout();
+    dj_game_load_layout();
     dj_audio_init();
 
     runGameLoopNative = (void *)so_symbol(&so_mod, "Java_com_limasky_doodlejumpandroid_NotificationCenter_runGameLoopNative");

@@ -770,7 +770,7 @@ so_default_dynlib default_dynlib[] = {
         { "glNormal3f", (uintptr_t)&glNormal3f },
         { "glNormal3x", (uintptr_t)&glNormal3x },
         { "glNormalPointer", (uintptr_t)&glNormalPointer },
-        { "glOrthof", (uintptr_t)&glOrthof },
+        { "glOrthof", (uintptr_t)&glOrthof_dj },
         { "glOrthox", (uintptr_t)&glOrthox },
         { "glPixelStorei", (uintptr_t)&glPixelStorei },
         { "glPointParameterf", (uintptr_t)&ret0 },
