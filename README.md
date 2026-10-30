@@ -23,8 +23,10 @@ No game files are included. You need your own copy of the APK.
   (text files/saves, asset checks, alert dialogs, sound).
 - `source/dj_audio.c` replaces Android's SoundPool/AudioTrack: Ogg assets are
   decoded with stb_vorbis and mixed into a SceAudio port.
-- The game is portrait-only, so it gets a 362×544 (2:3) area in the middle of
-  the screen (`source/dj_game.c`).
+- The game is portrait-only. By default the picture is rotated by 90° and fills
+  the whole screen (hold the Vita upright, D-pad at the bottom). Creating
+  `ux0:data/doodlejump/landscape.txt` switches to a 362×544 strip in the middle
+  of the landscape screen instead (`source/dj_game.c`).
 
 Not supported: ads, in-app purchases, online highscores, Google Play Games,
 cloud sync, share images, and the text textures that Android draws with its
@@ -52,7 +54,7 @@ Saves are written to `ux0:data/doodlejump/files/`.
 
 | Vita | Game |
 |---|---|
-| Left stick / D-pad left-right | Tilt (steer the doodler) |
+| Left stick / D-pad (left-right as you hold the Vita) | Tilt (steer the doodler) |
 | Touch screen | Touch (menus, shooting) |
 | Cross / Square / R | Shoot straight up |
 | Circle / Start | Android back button (pause / back) |

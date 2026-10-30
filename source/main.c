@@ -1,6 +1,7 @@
 #include "utils/init.h"
 #include "utils/glutil.h"
 #include "utils/logger.h"
+#include "utils/utils.h"
 
 #include <math.h>
 #include <string.h>
@@ -36,9 +37,25 @@ so_module so_mod;
 #define SCREEN_W 960
 #define SCREEN_H 544
 
+// Rotated (default): the picture is turned by 90 degrees and fills the whole
+// screen; the Vita is held upright with its left side (D-pad) at the bottom.
+// Pillarboxed: a 2:3 strip in the middle of the landscape screen. Selected by
+// creating DATA_PATH "landscape.txt".
+int dj_rotated = 1;
+
 int dj_game_w = 362;
 int dj_game_h = SCREEN_H;
 int dj_game_x = (SCREEN_W - 362) / 2;
+
+static void setup_layout(void) {
+    dj_rotated = !file_exists(DATA_PATH "landscape.txt");
+    if (dj_rotated) {
+        dj_game_w = SCREEN_H;
+        dj_game_h = SCREEN_W;
+        dj_game_x = 0;
+    }
+    l_info("Layout: %s, game screen %ix%i", dj_rotated ? "rotated" : "pillarboxed", dj_game_w, dj_game_h);
+}
 
 /*
  * Input
@@ -86,6 +103,12 @@ static void to_game_coords(int tx, int ty, float *gx, float *gy) {
     // Front panel reports 1920x1088
     float sx = (float)tx * SCREEN_W / 1920.0f;
     float sy = (float)ty * SCREEN_H / 1088.0f;
+    if (dj_rotated) {
+        // Game top is the screen's right edge, game left is the screen's top edge.
+        *gx = sy;
+        *gy = (float)(SCREEN_W - 1) - sx;
+        return;
+    }
     float x = sx - (float)dj_game_x;
     if (x < 0) x = 0;
     if (x > dj_game_w - 1) x = (float)(dj_game_w - 1);
@@ -152,9 +175,17 @@ static void poll_buttons(void) {
 
     // Tilt: left stick or D-pad. Android reports a negative X acceleration
     // when the phone's right edge goes down.
-    float tilt = stick_axis(pad.lx);
-    if (pad.buttons & SCE_CTRL_LEFT) tilt = -1.0f;
-    if (pad.buttons & SCE_CTRL_RIGHT) tilt = 1.0f;
+    float tilt;
+    if (dj_rotated) {
+        // Held upright, the player's right is the Vita's down.
+        tilt = stick_axis(pad.ly);
+        if (pad.buttons & SCE_CTRL_UP) tilt = -1.0f;
+        if (pad.buttons & SCE_CTRL_DOWN) tilt = 1.0f;
+    } else {
+        tilt = stick_axis(pad.lx);
+        if (pad.buttons & SCE_CTRL_LEFT) tilt = -1.0f;
+        if (pad.buttons & SCE_CTRL_RIGHT) tilt = 1.0f;
+    }
     accels[0] = -tilt * TILT_MAX;
     accels[1] = 0.0f;
     accels[2] = 9.81f;
@@ -207,6 +238,7 @@ int main() {
     dj_jni_install();
     dj_java_init(&so_mod);
     l_info("Java bridge initialized.");
+    setup_layout();
     dj_audio_init();
 
     runGameLoopNative = (void *)so_symbol(&so_mod, "Java_com_limasky_doodlejumpandroid_NotificationCenter_runGameLoopNative");

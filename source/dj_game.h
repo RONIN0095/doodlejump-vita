@@ -15,6 +15,7 @@
 
 #include <vitaGL.h>
 
+extern int dj_rotated;
 extern int dj_game_w, dj_game_h, dj_game_x;
 
 void dj_gl_setup(void);
@@ -25,6 +26,8 @@ void dj_gl_end_frame(void);
 void glViewport_dj(GLint x, GLint y, GLsizei w, GLsizei h);
 void glDisable_dj(GLenum cap);
 void glClearColor_dj(GLfloat r, GLfloat g, GLfloat b, GLfloat a);
+void glMatrixMode_dj(GLenum mode);
+void glLoadIdentity_dj(void);
 unsigned int eglSwapBuffers_dj(void *display, void *surface);
 void *eglGetCurrentDisplay_dj(void);
 void *eglGetCurrentSurface_dj(int readdraw);
