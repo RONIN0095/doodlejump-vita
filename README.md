@@ -29,6 +29,8 @@ No game files are included. You need your own copy of the APK.
   of the landscape screen. The choice is remembered.
 - The text textures Android drew with Canvas (store prices, score-marker
   names) are rendered with the game's own handwritten font (`source/dj_text.c`).
+- The "remove ads", "share" and "toys" buttons get transparent images
+  (`source/dj_hidden.c`), since none of them work offline.
 
 Not supported: ads, in-app purchases, online highscores, Google Play Games,
 cloud sync and share images.

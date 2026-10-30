@@ -107,6 +107,7 @@ set(SOURCES
     source/main.c
     source/dj_audio.c
     source/dj_game.c
+    source/dj_hidden.c
     source/dj_java.c
     source/dj_jni.c
     source/dj_text.c

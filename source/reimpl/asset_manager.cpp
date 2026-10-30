@@ -1,5 +1,6 @@
 #include "reimpl/asset_manager.h"
 #include "utils/logger.h"
+#include "dj_hidden.h"
 
 #include <pthread.h>
 #include <malloc.h>
@@ -39,7 +40,9 @@ AAssetManager * AAssetManager_create() {
 }
 
 AAsset* AAssetManager_open(AAssetManager* mgr, const char* filename, int mode) {
-    std::string realp = std::string(GAME_PATH) + std::string("assets/") + std::string(filename);
+    const char * override_path = dj_asset_override(filename);
+    std::string realp = override_path ? std::string(override_path)
+                                      : std::string(GAME_PATH) + std::string("assets/") + std::string(filename);
 
     auto * a = new aAsset;
     a->filename = (char *) malloc(realp.length() + 1);
