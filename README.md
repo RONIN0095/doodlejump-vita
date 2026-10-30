@@ -27,10 +27,11 @@ No game files are included. You need your own copy of the APK.
   switched while playing (`source/dj_game.c`): rotated by 90° to fill the whole
   screen (hold the Vita upright, D-pad at the bottom), or a strip in the middle
   of the landscape screen. The choice is remembered.
+- The text textures Android drew with Canvas (store prices, score-marker
+  names) are rendered with the game's own handwritten font (`source/dj_text.c`).
 
 Not supported: ads, in-app purchases, online highscores, Google Play Games,
-cloud sync, share images, and the text textures that Android draws with its
-system font (currency and score-marker labels).
+cloud sync and share images.
 
 ## Installation
 

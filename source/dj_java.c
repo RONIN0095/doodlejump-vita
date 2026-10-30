@@ -17,6 +17,7 @@
 #include "dj_java.h"
 #include "dj_jni.h"
 #include "dj_audio.h"
+#include "dj_text.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -144,6 +145,95 @@ static void handle_does_file_exist(jobject data) {
     }
     dj_set_bool(data, "file_exists", exists);
     free(name);
+}
+
+/*
+ * Text textures (OpenGL10Renderer on Android, drawn there with Canvas and
+ * bold Helvetica; here with the game's own handwritten font)
+ */
+
+static int string_array_length(jobject arr) {
+    return arr ? (*dj_env())->GetArrayLength(dj_env(), (jarray)arr) : 0;
+}
+
+static char *string_array_get(jobject arr, int i) {
+    return dj_jstring_to_utf8((jstring)(*dj_env())->GetObjectArrayElement(dj_env(), (jobjectArray)arr, i));
+}
+
+static int begin_text_texture(jobject data, int *w, int *h, float *tm, uint8_t **rgba) {
+    dj_set_int(data, "status", 0);
+    dj_set_int(data, "texture_id", 0);
+
+    *w = dj_get_int(data, "width");
+    *h = dj_get_int(data, "height");
+    *tm = dj_get_float(data, "texture_multiplier");
+    if (*w <= 0 || *h <= 0 || *w > 4096 || *h > 4096 || !dj_text_init()) {
+        l_error("[JAVA] Cannot generate text texture %ix%i", *w, *h);
+        return 0;
+    }
+    *rgba = calloc((size_t)*w * *h, 4);
+    return *rgba != NULL;
+}
+
+static void finish_text_texture(jobject data, int w, int h, uint8_t *rgba) {
+    GLuint tex = dj_text_upload(rgba, w, h);
+    free(rgba);
+    dj_set_int(data, "texture_id", (jint)tex);
+    dj_set_int(data, "status", tex ? 1 : 0);
+}
+
+static void handle_generate_currency_texture(jobject data) {
+    int w, h;
+    float tm;
+    uint8_t *rgba;
+    if (!begin_text_texture(data, &w, &h, &tm, &rgba)) return;
+
+    // One centered line per text, 50 units apart.
+    float size = 12.0f * tm;
+    jobject texts = dj_get_obj(data, "texts");
+    int n = string_array_length(texts);
+    for (int i = 0; i < n; i++) {
+        char *t = string_array_get(texts, i);
+        float baseline = tm * (i * 50 + 25) + dj_text_cap_height(size) / 2.0f;
+        dj_text_draw(rgba, w, h, t, -1, 128.0f * tm, baseline, size, DJ_ALIGN_CENTER, 0, 0, 0);
+        free(t);
+    }
+
+    finish_text_texture(data, w, h, rgba);
+}
+
+static void draw_scoremarkers(uint8_t *rgba, int w, int h, float tm, jobject names) {
+    float size = 12.0f * tm;
+    for (int i = string_array_length(names) - 1; i >= 0; i--) {
+        // Blue marker line (blue_scoremark.png on Android) and the name above it
+        dj_text_fill_rect(rgba, w, h, 0, (int)(h - tm * (i * 24 + 7)), (int)(tm * 64), (int)(h - tm * (i * 24 + 3)),
+                          0, 85, 170, 255);
+        char *name = string_array_get(names, i);
+        dj_text_draw(rgba, w, h, name, 8, tm * 62.0f, h - tm * (i * 24 + 7), size, DJ_ALIGN_RIGHT, 0, 0, 0);
+        free(name);
+    }
+}
+
+static void handle_generate_scoremarker_texture(jobject data) {
+    int w, h;
+    float tm;
+    uint8_t *rgba;
+    if (!begin_text_texture(data, &w, &h, &tm, &rgba)) return;
+
+    draw_scoremarkers(rgba, w, h, tm, dj_get_obj(data, "local_names"));
+    draw_scoremarkers(rgba, w, h, tm, dj_get_obj(data, "recent_names"));
+
+    // Android drew through Canvas.scale(1, -1): the texture is upside down.
+    size_t stride = (size_t)w * 4;
+    uint8_t *row = malloc(stride);
+    for (int y = 0; y < h / 2; y++) {
+        memcpy(row, rgba + y * stride, stride);
+        memcpy(rgba + y * stride, rgba + (h - 1 - y) * stride, stride);
+        memcpy(rgba + (h - 1 - y) * stride, row, stride);
+    }
+    free(row);
+
+    finish_text_texture(data, w, h, rgba);
 }
 
 /*
@@ -374,13 +464,11 @@ int dj_java_receive_message(int msg, jobject data, int arg1, int arg2) {
             handle_does_file_exist(data);
             break;
 
-        case Msg_Generate_Scoremarker_Texture:
         case Msg_Generate_Currency_Texture:
-            // Android renders these with Canvas + system fonts. Not available
-            // yet: report failure so the game skips the texture.
-            dj_set_int(data, "status", 0);
-            dj_set_int(data, "texture_id", 0);
-            log_unhandled(msg);
+            handle_generate_currency_texture(data);
+            break;
+        case Msg_Generate_Scoremarker_Texture:
+            handle_generate_scoremarker_texture(data);
             break;
 
         case Msg_Request_Ad_Status:

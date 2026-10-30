@@ -24,6 +24,10 @@
 
 #include "dj_game.h"
 #include "dj_java.h"
+#include "dj_text.h"
+
+#include <stdlib.h>
+#include <string.h>
 
 #include <psp2/io/fcntl.h>
 
@@ -170,15 +174,124 @@ void dj_gl_begin_frame(void) {
     glEnable(GL_SCISSOR_TEST);
 }
 
+/*
+ * Signature: a small "1theronin" in the game's handwriting in the top right
+ * corner of the menus. Hidden while a round is played.
+ */
+
+#define SIGNATURE_TEXT "1theronin"
+#define SIGNATURE_TEX_W 256
+#define SIGNATURE_TEX_H 64
+#define SIGNATURE_SIZE 40.0f   // text size inside the texture
+#define SIGNATURE_SCALE 0.55f  // texture pixels -> game pixels
+#define SIGNATURE_ALPHA 0.55f
+
+static GLuint signature_tex = 0;
+static int signature_failed = 0;
+
+static int load_signature(void) {
+    if (signature_tex || signature_failed) return signature_tex != 0;
+    if (!dj_text_init()) {
+        signature_failed = 1;
+        return 0;
+    }
+    uint8_t *rgba = calloc(SIGNATURE_TEX_W * SIGNATURE_TEX_H, 4);
+    dj_text_draw(rgba, SIGNATURE_TEX_W, SIGNATURE_TEX_H, SIGNATURE_TEXT, -1,
+                 SIGNATURE_TEX_W - 4, SIGNATURE_TEX_H * 0.7f, SIGNATURE_SIZE, DJ_ALIGN_RIGHT, 40, 40, 40);
+    signature_tex = dj_text_upload(rgba, SIGNATURE_TEX_W, SIGNATURE_TEX_H);
+    free(rgba);
+    return signature_tex != 0;
+}
+
+static void draw_signature(void) {
+    if (dj_java_gameplay_active() || dj_java_dialog_active()) return;
+
+    // Save the state the game may rely on
+    GLint active_tex, bound_tex, blend_src, blend_dst;
+    GLfloat color[4];
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &active_tex);
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound_tex);
+    glGetIntegerv(GL_BLEND_SRC, &blend_src);
+    glGetIntegerv(GL_BLEND_DST, &blend_dst);
+    glGetFloatv(GL_CURRENT_COLOR, color);
+    GLboolean tex2d = glIsEnabled(GL_TEXTURE_2D);
+    GLboolean blend = glIsEnabled(GL_BLEND);
+    GLboolean alpha_test = glIsEnabled(GL_ALPHA_TEST);
+    GLboolean depth_test = glIsEnabled(GL_DEPTH_TEST);
+
+    if (!load_signature()) {
+        glBindTexture(GL_TEXTURE_2D, bound_tex);
+        glActiveTexture(active_tex);
+        return;
+    }
+
+    GLint saved_viewport[4] = { game_viewport[0], game_viewport[1], game_viewport[2], game_viewport[3] };
+    game_viewport[0] = 0;
+    game_viewport[1] = 0;
+    game_viewport[2] = DJ_GAME_W;
+    game_viewport[3] = DJ_GAME_H;
+    apply_viewport();
+
+    // Game pixels, origin top left
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    apply_projection_rotation();
+    glOrthof(0, DJ_GAME_W, DJ_GAME_H, 0, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, signature_tex);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDisable(GL_ALPHA_TEST);
+    glDisable(GL_DEPTH_TEST);
+    glColor4f(1.0f, 1.0f, 1.0f, SIGNATURE_ALPHA);
+
+    float qw = SIGNATURE_TEX_W * SIGNATURE_SCALE, qh = SIGNATURE_TEX_H * SIGNATURE_SCALE;
+    float x1 = DJ_GAME_W - 8.0f, x0 = x1 - qw;
+    float y0 = 4.0f, y1 = y0 + qh;
+    glBegin(GL_TRIANGLE_STRIP);
+    glTexCoord2f(0, 0); glVertex2f(x0, y0);
+    glTexCoord2f(1, 0); glVertex2f(x1, y0);
+    glTexCoord2f(0, 1); glVertex2f(x0, y1);
+    glTexCoord2f(1, 1); glVertex2f(x1, y1);
+    glEnd();
+
+    // Restore
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(matrix_mode);
+
+    memcpy(game_viewport, saved_viewport, sizeof(saved_viewport));
+    apply_viewport();
+
+    glColor4f(color[0], color[1], color[2], color[3]);
+    glBlendFunc(blend_src, blend_dst);
+    if (!blend) glDisable(GL_BLEND);
+    if (alpha_test) glEnable(GL_ALPHA_TEST);
+    if (depth_test) glEnable(GL_DEPTH_TEST);
+    if (!tex2d) glDisable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, bound_tex);
+    glActiveTexture(active_tex);
+}
+
 void dj_gl_end_frame(void) {
     // On Android, GLSurfaceView swaps after onDrawFrame returns.
-    if (!swapped_this_frame)
+    if (!swapped_this_frame) {
+        draw_signature();
         vglSwapBuffers(dj_java_dialog_active() ? GL_TRUE : GL_FALSE);
+    }
 }
 
 unsigned int eglSwapBuffers_dj(void *display, void *surface) {
     if (swapped_this_frame) return 1;
     swapped_this_frame = 1;
+    draw_signature();
     vglSwapBuffers(dj_java_dialog_active() ? GL_TRUE : GL_FALSE);
     return 1;
 }

@@ -109,6 +109,7 @@ set(SOURCES
     source/dj_game.c
     source/dj_java.c
     source/dj_jni.c
+    source/dj_text.c
     source/dynlib.c
     source/java.c
     source/patch.c
