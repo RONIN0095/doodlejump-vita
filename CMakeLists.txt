@@ -247,6 +247,10 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
                       )
 
 vita_create_self(eboot.bin ${CMAKE_PROJECT_NAME} UNSAFE NOASLR)
+# LiveArea images: the generic ones in extras/, or ones generated from the
+# game's assets with extras/scripts/make_livearea.py
+set(LIVEAREA_DIR "${CMAKE_SOURCE_DIR}/extras/livearea" CACHE PATH "Folder with icon0/pic0/bg0/startup.png and template.xml")
+
 set(GAME_VPK_FILES "")
 if (GAME_DATA_DIR)
   if (NOT EXISTS "${GAME_DATA_DIR}/lib/armeabi-v7a/libDoodleJump.so")
@@ -265,11 +269,11 @@ vita_create_vpk(${VITA_VPKNAME}.vpk ${VITA_TITLEID} eboot.bin
                 FILE ${CMAKE_SOURCE_DIR}/extras/cpuinfo cpuinfo
                 ${CMAKE_SOURCE_DIR}/extras/meminfo meminfo
                 ${CMAKE_SOURCE_DIR}/extras/urandom urandom
-                ${CMAKE_SOURCE_DIR}/extras/livearea/icon0.png sce_sys/icon0.png
-                ${CMAKE_SOURCE_DIR}/extras/livearea/pic0.png sce_sys/pic0.png
-                ${CMAKE_SOURCE_DIR}/extras/livearea/startup.png sce_sys/livearea/contents/startup.png
-                ${CMAKE_SOURCE_DIR}/extras/livearea/bg0.png sce_sys/livearea/contents/bg0.png
-                ${CMAKE_SOURCE_DIR}/extras/livearea/template.xml sce_sys/livearea/contents/template.xml
+                ${LIVEAREA_DIR}/icon0.png sce_sys/icon0.png
+                ${LIVEAREA_DIR}/pic0.png sce_sys/pic0.png
+                ${LIVEAREA_DIR}/startup.png sce_sys/livearea/contents/startup.png
+                ${LIVEAREA_DIR}/bg0.png sce_sys/livearea/contents/bg0.png
+                ${LIVEAREA_DIR}/template.xml sce_sys/livearea/contents/template.xml
                 ${GAME_VPK_FILES}
                 )
 
